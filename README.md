@@ -4,7 +4,7 @@ An AI receptionist for hotels that answers website chats and phone calls, checks
 
 > Portfolio build. It is modeled on a public Upwork job brief for a hotel AI receptionist and runs on a fictional demo hotel (Grandview Hotel) with a Supabase table standing in for a real booking system.
 
-**Demo video:** [Watch the demo](ADD_YOUR_DEMO_LINK_HERE)
+**Demo video:** [Watch the demo](https://habtech.neetorecord.com/watch/6551a5a6063bd1ea90d3)
 
 ## The problem
 
