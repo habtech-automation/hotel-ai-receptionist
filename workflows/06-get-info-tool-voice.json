@@ -1,0 +1,86 @@
+{
+  "name": "Hotel - Get Info Tool (Voice)",
+  "nodes": [
+    {
+      "id": "1e556811-9bab-4e84-92ac-137736c3c071",
+      "name": "ElevenLabs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "get-hotel-info",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "55e2cb0a-09e8-4f25-8eb8-54cce4188868",
+      "name": "Check Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const raw = $input.item.json;\nconst SHARED_SECRET = 'YOUR_SHARED_SECRET';\nconst providedKey = raw.headers && (raw.headers['x-api-key'] || raw.headers['X-Api-Key']);\nif (providedKey !== SHARED_SECRET) {\n  throw new Error('Unauthorized: missing or invalid x-api-key header');\n}\nreturn [{ json: {} }];"
+      }
+    },
+    {
+      "id": "359923dd-f49f-480c-b230-2e9e3ce51287",
+      "name": "Get Knowledge Base",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "documentURL": "YOUR_GOOGLE_DOC_ID",
+        "operation": "get"
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "YOUR_GOOGLEDOCSOAUTH2API_ID",
+          "name": "Your googleDocsOAuth2Api"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth": {
+      "main": [
+        [
+          {
+            "node": "Get Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_HANDLER_WORKFLOW_ID"
+  }
+}

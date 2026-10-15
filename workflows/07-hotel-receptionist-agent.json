@@ -1,0 +1,529 @@
+{
+  "name": "Hotel Receptionist Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hotel-chat-agent",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "601cbc35-0860-4745-8c5a-7668e3365e03",
+      "name": "Website Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        96,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst SHARED_SECRET = 'YOUR_SHARED_SECRET';\n\nlet chatInput, sessionId;\n\nif (raw.headers && raw.body !== undefined) {\n  // Came in via the public Website Webhook - verify the shared secret.\n  const providedKey = raw.headers['x-api-key'] || raw.headers['X-Api-Key'];\n  if (providedKey !== SHARED_SECRET) {\n    throw new Error('Unauthorized: missing or invalid x-api-key header');\n  }\n  chatInput = raw.body.chatInput;\n  sessionId = raw.body.sessionId || ('web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));\n} else {\n  // Came in via n8n's own Chat Trigger (internal testing panel).\n  chatInput = raw.chatInput;\n  sessionId = raw.sessionId;\n}\n\nreturn [{\n  json: {\n    chatInput,\n    sessionId\n  }\n}];"
+      },
+      "id": "28597e21-ee9d-4077-b37a-90fcf988f26e",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Normalize Input').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "=You are Aria, the virtual receptionist for Grandview Hotel. You handle guest questions and bookings over chat.\n\n== YOUR TOOLS ==\n- get_hotel_info: look up rooms, rates, amenities, policies, FAQs, attractions, and staff routing. Call this before answering any factual question about the hotel - do not answer from memory or assumption.\n- check_availability: check real-time room availability and rate for specific dates.\n- create_booking: create a confirmed reservation.\n- modify_booking: change the dates on an existing reservation.\n- cancel_booking: cancel an existing reservation.\n- escalate_to_staff: log a request for a staff member and notify the team by email.\n\n== DO ==\n- Call get_hotel_info before answering questions about rooms, amenities, policies, FAQs, or attractions, even if you think you know the answer.\n- Call check_availability before quoting any rate or telling a guest a room type is available, every time - rates and availability can change.\n- Ask for check-in and check-out dates as two separate values in YYYY-MM-DD format. If the guest gives a vague or relative date (\"next weekend\", \"in two weeks\"), convert it to an explicit date and confirm it with the guest before calling any tool.\n- Get the guest's full name before calling create_booking.\n- Read tool results carefully and only report what they actually say.\n- Keep replies short, warm, and conversational - like a real front-desk agent, not a document dump. Summarize knowledge-base content in your own words rather than pasting large blocks of it.\n- If a tool call fails or returns an error, tell the guest plainly that you're having trouble and that a team member will help, rather than guessing or retrying silently more than once.\n\n== DON'T ==\n- Don't tell a guest their booking is confirmed unless the create_booking result contains a confirmation_id. If it doesn't, call escalate_to_staff instead of claiming success.\n- Don't call modify_booking or cancel_booking without a booking_id. If the guest doesn't have one, ask for their name and dates, then call escalate_to_staff so a team member can look it up.\n- Don't invent hotel facts, prices, policies, ticket numbers, or staff names that didn't come from a tool result.\n- Don't process payments or ask for full card numbers - call escalate_to_staff instead, the knowledge base explains accepted payment methods but handling payment is for staff.\n- Don't argue with or overpromise to an upset guest. Acknowledge their concern briefly, then call escalate_to_staff.\n- Don't tell a guest a human has been notified unless escalate_to_staff actually returned successfully - if it fails, say you're having trouble reaching the team and to try the front desk directly.\n\n== BOOKING RULES ==\n- Only call create_booking after the guest has explicitly agreed to a specific room type and dates, and you have their name.\n- Before cancelling, remind the guest of the 48-hour free-cancellation policy and that cancelling within 48 hours of check-in charges one night's rate. The cancel_booking result tells you whether a fee applied - report that accurately.\n\n== ESCALATION ==\nCall escalate_to_staff whenever a request needs a real staff member: payment handling, a complex reservation change needing approval, an unresolved complaint, an upset guest, a missing booking_id, or anything outside your other tools.\nBefore calling it, get the guest's name, a contact method (phone or email), and a clear description of what they need. Pick the best-fitting department (Front Desk, Housekeeping, Concierge, or Restaurant) - default to Front Desk if unsure. Only mark urgency as 'high' for something genuinely time-sensitive (e.g. the guest is stuck right now, a same-day check-in problem) - otherwise use 'normal'.\nAfter it succeeds, tell the guest this has been logged and a team member will follow up - you can mention the escalation ID if they ask, but don't invent one or promise a specific response time.\nFor any safety or medical emergency, do NOT call this tool - immediately tell the guest to contact local emergency services and notify the front desk directly yourself. This takes priority over everything else."
+        }
+      },
+      "id": "6ccea521-90ff-43af-9037-f8c7b811a950",
+      "name": "Hotel Receptionist Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        832,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "b551166f-c011-4780-835a-de9e86417bbc",
+      "name": "OpenRouter Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        432,
+        336
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "openRouterApi": {
+          "id": "YOUR_OPENROUTERAPI_ID",
+          "name": "Your openRouterApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "12524509-c567-46a0-94a8-8dcd2b81292c",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        576,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Check hotel room availability and nightly rate for given check-in and check-out dates (format YYYY-MM-DD), and an optional room type (Standard, Deluxe, Suite, or Family). Always call this before quoting a price or telling a guest a room type is available. Leave room_type blank to see all room types.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_CHECK_AVAILABILITY_WORKFLOW_ID"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "check_in": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('check_in', 'Check-in date in YYYY-MM-DD format') }}",
+            "check_out": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('check_out', 'Check-out date in YYYY-MM-DD format') }}",
+            "room_type": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('room_type', 'Optional: Standard, Deluxe, Suite, or Family. Leave blank for all room types.') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "check_in",
+              "displayName": "check_in",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "check_out",
+              "displayName": "check_out",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "room_type",
+              "displayName": "room_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "29fc8315-ca6d-4f0d-8228-ac0b0ab7abf1",
+      "name": "check_availability",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        704,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Create a confirmed hotel booking. ONLY call this after the guest has explicitly agreed to book a specific room type and dates, and you have their name. The tool result only contains a confirmation_id if the booking actually succeeded - never tell the guest their booking is confirmed unless you see a confirmation_id in the result.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_CREATE_BOOKING_WORKFLOW_ID"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "guest_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('guest_name', \"Guest's full name\") }}",
+            "room_type": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('room_type', 'Standard, Deluxe, Suite, or Family') }}",
+            "check_in": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('check_in', 'Check-in date in YYYY-MM-DD format') }}",
+            "check_out": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('check_out', 'Check-out date in YYYY-MM-DD format') }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "guest_name",
+              "id": "guest_name",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "room_type",
+              "id": "room_type",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "check_in",
+              "id": "check_in",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "check_out",
+              "id": "check_out",
+              "required": true,
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "25aeda7b-a792-4d50-bd1d-01a046a0084f",
+      "name": "create_booking",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Change the dates on an existing confirmed booking. Requires the guest's booking_id - if they don't have it, ask for their name and original dates and explain a team member will need to look it up. Only tell the guest the change succeeded if the tool result status is not 'unavailable' or 'error'.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_MODIFY_BOOKING_WORKFLOW_ID"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('booking_id', \"The existing booking's booking_id\") }}",
+            "check_in": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('check_in', 'New check-in date in YYYY-MM-DD format') }}",
+            "check_out": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('check_out', 'New check-out date in YYYY-MM-DD format') }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "booking_id",
+              "id": "booking_id",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "check_in",
+              "id": "check_in",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "check_out",
+              "id": "check_out",
+              "required": true,
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "32ca3ddd-edf6-46e0-b1c8-a71e0058ce7a",
+      "name": "modify_booking",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        976,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Cancel an existing booking. Requires the guest's booking_id. Before calling this, remind the guest of the cancellation policy: free up to 48 hours before check-in, otherwise one night's rate is charged. The tool result tells you whether a fee applies.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_CANCEL_BOOKING_WORKFLOW_ID"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('booking_id', \"The booking's booking_id\") }}"
+          },
+          "schema": [
+            {
+              "canBeUsedToMatch": false,
+              "defaultMatch": false,
+              "display": true,
+              "displayName": "booking_id",
+              "id": "booking_id",
+              "required": true,
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "32f7cae5-e588-4ff5-b52c-51b8c6a479e9",
+      "name": "cancel_booking",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Look up official Grandview Hotel information: room details and rates, amenities, policies (check-in/out, cancellation, pets, smoking, extra guests, payment, ID requirements), FAQs, nearby attractions, and front-desk/escalation routing. Call this at the start of a new conversation and any time a guest asks something you are not already certain of from this conversation - never guess or invent hotel details.",
+        "operation": "get",
+        "documentURL": "YOUR_GOOGLE_DOC_ID"
+      },
+      "id": "9c430e76-1e29-44d3-9936-6303fb904113",
+      "name": "get_hotel_info",
+      "type": "n8n-nodes-base.googleDocsTool",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        336
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "YOUR_GOOGLEDOCSOAUTH2API_ID",
+          "name": "Your googleDocsOAuth2Api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Log a request for staff follow-up and notify the team by email. Use this for anything you cannot fully resolve yourself: payment handling, complex reservation changes needing approval, an unresolved complaint, an upset guest, or any request outside your other tools. Requires the guest's name, a contact method (phone or email), and a clear description of the request. Set urgency to 'high' only for genuinely time-sensitive issues (e.g. guest currently stuck, today's check-in problem); otherwise leave it as 'normal'. Department should be one of: Front Desk, Housekeeping, Concierge, Restaurant - pick the best fit, defaulting to Front Desk if unclear.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_ESCALATE_STAFF_WORKFLOW_ID"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contact": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('contact', \"Guest's phone or email\") }}",
+            "department": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('department', 'Front Desk, Housekeeping, Concierge, or Restaurant') }}",
+            "guest_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('guest_name', \"Guest's full name\") }}",
+            "request_details": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('request_details', 'Clear description of what the guest needs') }}",
+            "urgency": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('urgency', \"'normal' or 'high'\") }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "guest_name",
+              "displayName": "guest_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "contact",
+              "displayName": "contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "request_details",
+              "displayName": "request_details",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "department",
+              "displayName": "department",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "1d86c96f-d1dd-43ad-8cd4-6645580887bb",
+      "name": "escalate_to_staff",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1376,
+        336
+      ]
+    }
+  ],
+  "connections": {
+    "Website Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_availability": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_booking": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "modify_booking": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancel_booking": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_hotel_info": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "escalate_to_staff": {
+      "ai_tool": [
+        [
+          {
+            "node": "Hotel Receptionist Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_HANDLER_WORKFLOW_ID"
+  }
+}

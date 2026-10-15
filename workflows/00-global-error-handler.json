@@ -1,0 +1,136 @@
+{
+  "name": "Hotel - Global Error Handler",
+  "nodes": [
+    {
+      "id": "35aa390d-202f-47c2-b60a-b40704de2496",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "26642a85-ee3a-4861-881e-933b495e90b0",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const err = $input.item.json;\nconst workflowName = (err.workflow && err.workflow.name) || 'Unknown workflow';\nconst workflowId = (err.workflow && err.workflow.id) || '';\nconst nodeName = (err.execution && err.execution.lastNodeExecuted) || 'Unknown node';\nconst executionUrl = (err.execution && err.execution.url) || '';\nconst errorObj = (err.execution && err.execution.error) || {};\nconst errorMessage = errorObj.message || errorObj.description || JSON.stringify(errorObj) || 'No error message available';\nconst occurredAt = new Date().toUTCString();\n\nconst escapeHtml = (s) => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst emailHtml = `\n<div style=\"font-family: -apple-system, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e5e5; border-radius: 10px; overflow: hidden;\">\n  <div style=\"background: #8C1C1C; color: #ffffff; padding: 18px 24px;\">\n    <span style=\"font-size: 13px; letter-spacing: 0.5px; opacity: 0.85;\">GRANDVIEW HOTEL SYSTEM</span>\n    <h2 style=\"margin: 4px 0 0; font-size: 18px; font-weight: 600;\">Workflow Error Detected</h2>\n  </div>\n  <div style=\"padding: 22px 24px 8px;\">\n    <span style=\"display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: #ffffff; background: #8C1C1C;\">ERROR</span>\n    <table style=\"width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 14px;\">\n      <tr>\n        <td style=\"padding: 7px 0; color: #888888; width: 120px; vertical-align: top;\">Workflow</td>\n        <td style=\"padding: 7px 0; font-weight: 600; color: #1A2B4C;\">${escapeHtml(workflowName)}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 7px 0; color: #888888; vertical-align: top;\">Failed Node</td>\n        <td style=\"padding: 7px 0; color: #222222;\">${escapeHtml(nodeName)}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 7px 0; color: #888888; vertical-align: top;\">Occurred</td>\n        <td style=\"padding: 7px 0; color: #222222;\">${escapeHtml(occurredAt)}</td>\n      </tr>\n    </table>\n    <div style=\"margin-top: 18px; padding: 14px 16px; background: #FBEEEE; border-left: 3px solid #8C1C1C; border-radius: 6px;\">\n      <div style=\"font-size: 11px; color: #999999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;\">Error Message</div>\n      <div style=\"font-size: 14px; color: #222222; white-space: pre-wrap; line-height: 1.5; font-family: monospace;\">${escapeHtml(errorMessage)}</div>\n    </div>\n    ${executionUrl ? `<div style=\"margin-top: 16px;\"><a href=\"${executionUrl}\" style=\"color: #1A2B4C; font-size: 13px;\">View full execution &rarr;</a></div>` : ''}\n  </div>\n  <div style=\"padding: 14px 24px; margin-top: 10px; background: #FAFAFA; border-top: 1px solid #EFEFEF; font-size: 12px; color: #999999;\">\n    Logged automatically by the Grandview Hotel error monitor.\n  </div>\n</div>`;\n\nreturn [{\n  json: {\n    workflow_name: workflowName,\n    workflow_id: workflowId,\n    node_name: nodeName,\n    error_message: errorMessage,\n    execution_url: executionUrl,\n    email_html: emailHtml\n  }\n}];"
+      }
+    },
+    {
+      "id": "039ff155-d571-4ee2-9938-0d977391df00",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "operation": "create",
+        "resource": "row",
+        "tableId": "error_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "workflow_name",
+              "fieldValue": "={{ $json.workflow_name }}"
+            },
+            {
+              "fieldId": "workflow_id",
+              "fieldValue": "={{ $json.workflow_id }}"
+            },
+            {
+              "fieldId": "node_name",
+              "fieldValue": "={{ $json.node_name }}"
+            },
+            {
+              "fieldId": "error_message",
+              "fieldValue": "={{ $json.error_message }}"
+            },
+            {
+              "fieldId": "execution_url",
+              "fieldValue": "={{ $json.execution_url }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "id": "6323008b-b262-4693-b84b-c7fb1918874d",
+      "name": "Send Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "sendTo": "alerts@example.com",
+        "subject": "={{ '⚠️ Grandview Hotel - Error in \"' + $('Format Error').item.json.workflow_name + '\" (' + $('Format Error').item.json.node_name + ')' }}",
+        "message": "={{ $('Format Error').item.json.email_html }}",
+        "messageType": "html",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAILOAUTH2_ID",
+          "name": "Your gmailOAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

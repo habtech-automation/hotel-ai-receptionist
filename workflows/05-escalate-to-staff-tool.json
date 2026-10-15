@@ -1,0 +1,243 @@
+{
+  "name": "Hotel - Escalate to Staff Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"guest_name\": \"Jane Doe\",\n  \"contact\": \"jane@example.com\",\n  \"request_details\": \"Needs help with a late checkout request.\",\n  \"department\": \"Front Desk\",\n  \"urgency\": \"normal\"\n}"
+      },
+      "id": "4402f68e-372e-4164-a08c-b65e1feda367",
+      "name": "When Called by Agent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -112,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('Normalize Input').first().json;\nconst stamp = Date.now();\nconst escalationId = 'ESC-' + stamp;\nconst department = (trigger.department || '').trim() || 'Front Desk';\nconst urgency = (trigger.urgency || '').trim().toLowerCase() === 'high' ? 'high' : 'normal';\nconst guestName = trigger.guest_name;\nconst contact = trigger.contact;\nconst requestDetails = trigger.request_details;\n\nconst urgencyColor = urgency === 'high' ? '#D64545' : '#3B6BC4';\nconst urgencyLabel = urgency === 'high' ? 'HIGH URGENCY' : 'NORMAL';\nconst escapeHtml = (s) => String(s == null ? '' : s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst emailHtml = `\n<div style=\"font-family: -apple-system, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e5e5; border-radius: 10px; overflow: hidden;\">\n  <div style=\"background: #1A2B4C; color: #ffffff; padding: 18px 24px;\">\n    <span style=\"font-size: 13px; letter-spacing: 0.5px; opacity: 0.8;\">GRANDVIEW HOTEL</span>\n    <h2 style=\"margin: 4px 0 0; font-size: 18px; font-weight: 600;\">Guest Needs Staff Follow-Up</h2>\n  </div>\n  <div style=\"padding: 22px 24px 8px;\">\n    <span style=\"display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: #ffffff; background: ${urgencyColor};\">${urgencyLabel}</span>\n    <span style=\"display: inline-block; margin-left: 8px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #444444; background: #F0F1F4;\">${escapeHtml(department).toUpperCase()}</span>\n    <table style=\"width: 100%; margin-top: 18px; border-collapse: collapse; font-size: 14px;\">\n      <tr>\n        <td style=\"padding: 7px 0; color: #888888; width: 110px; vertical-align: top;\">Guest</td>\n        <td style=\"padding: 7px 0; font-weight: 600; color: #1A2B4C;\">${escapeHtml(guestName)}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 7px 0; color: #888888; vertical-align: top;\">Contact</td>\n        <td style=\"padding: 7px 0; color: #222222;\">${escapeHtml(contact)}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 7px 0; color: #888888; vertical-align: top;\">Escalation ID</td>\n        <td style=\"padding: 7px 0; color: #222222; font-family: monospace; font-size: 13px;\">${escapeHtml(escalationId)}</td>\n      </tr>\n    </table>\n    <div style=\"margin-top: 18px; padding: 14px 16px; background: #F7F7F9; border-left: 3px solid #1A2B4C; border-radius: 6px;\">\n      <div style=\"font-size: 11px; color: #999999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;\">Guest Request</div>\n      <div style=\"font-size: 14px; color: #222222; white-space: pre-wrap; line-height: 1.5;\">${escapeHtml(requestDetails)}</div>\n    </div>\n  </div>\n  <div style=\"padding: 14px 24px; margin-top: 10px; background: #FAFAFA; border-top: 1px solid #EFEFEF; font-size: 12px; color: #999999;\">\n    Logged automatically by Aria, the AI receptionist &middot; ${new Date().toUTCString()}\n  </div>\n</div>`;\n\nreturn [{\n  json: {\n    escalation_id: escalationId,\n    guest_name: guestName,\n    contact: contact,\n    request_details: requestDetails,\n    department,\n    urgency,\n    email_html: emailHtml\n  }\n}];"
+      },
+      "id": "c730187c-9558-4b31-80b8-e5c5189f24c8",
+      "name": "Prepare Escalation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "escalations",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "escalation_id",
+              "fieldValue": "={{ $json.escalation_id }}"
+            },
+            {
+              "fieldId": "guest_name",
+              "fieldValue": "={{ $json.guest_name }}"
+            },
+            {
+              "fieldId": "contact",
+              "fieldValue": "={{ $json.contact }}"
+            },
+            {
+              "fieldId": "request_details",
+              "fieldValue": "={{ $json.request_details }}"
+            },
+            {
+              "fieldId": "department",
+              "fieldValue": "={{ $json.department }}"
+            },
+            {
+              "fieldId": "urgency",
+              "fieldValue": "={{ $json.urgency }}"
+            }
+          ]
+        }
+      },
+      "id": "9d5e3ac2-1961-4f2d-ba5e-dab838f34904",
+      "name": "Insert Escalation",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "alerts@example.com",
+        "subject": "={{ ($('Prepare Escalation').item.json.urgency === 'high' ? '🔴 URGENT - ' : '') + 'Grandview Hotel: ' + $('Prepare Escalation').item.json.department + ' needed (' + $('Prepare Escalation').item.json.escalation_id + ')' }}",
+        "message": "={{ $('Prepare Escalation').item.json.email_html }}",
+        "options": {}
+      },
+      "id": "1df3c533-6e3f-46f7-b59f-e3dc8d02d3ac",
+      "name": "Send Escalation Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        672,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAILOAUTH2_ID",
+          "name": "Your gmailOAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "status",
+              "value": "escalated",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "escalation_id",
+              "value": "={{ $('Prepare Escalation').item.json.escalation_id }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "message",
+              "value": "This has been logged and a team member will follow up.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c9ff935c-5f85-4c1c-af36-b44ab03dccef",
+      "name": "Escalation Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "escalate-staff",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "7c2b90be-8018-4093-a294-6dd4c2be14b5",
+      "name": "ElevenLabs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst SHARED_SECRET = 'YOUR_SHARED_SECRET';\n\nlet body;\nif (raw.headers && raw.body !== undefined) {\n  const providedKey = raw.headers['x-api-key'] || raw.headers['X-Api-Key'];\n  if (providedKey !== SHARED_SECRET) {\n    throw new Error('Unauthorized: missing or invalid x-api-key header');\n  }\n  body = raw.body;\n} else {\n  body = raw;\n}\n\nreturn [{\n  json: {\n    guest_name: body.guest_name,\n    contact: body.contact,\n    request_details: body.request_details,\n    department: body.department,\n    urgency: body.urgency\n  }\n}];"
+      },
+      "id": "239231ca-a989-435a-b8de-1aded2e0bd3d",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        -16
+      ]
+    }
+  ],
+  "connections": {
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Escalation": {
+      "main": [
+        [
+          {
+            "node": "Insert Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Escalation": {
+      "main": [
+        [
+          {
+            "node": "Send Escalation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Escalation Email": {
+      "main": [
+        [
+          {
+            "node": "Escalation Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_HANDLER_WORKFLOW_ID"
+  }
+}

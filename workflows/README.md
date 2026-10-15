@@ -11,7 +11,7 @@ Eight workflows make up the system. Import them in the order below.
 | 4 | `04-cancel-booking-tool.json` | Hotel - Cancel Booking Tool | Execute Workflow + Webhook | Cancels a booking and says whether the 48-hour fee applies |
 | 5 | `05-escalate-to-staff-tool.json` | Hotel - Escalate to Staff Tool | Execute Workflow + Webhook | Logs the request and sends a styled HTML email to staff |
 | 6 | `06-get-info-tool-voice.json` | Hotel - Get Info Tool (Voice) | Webhook | Returns the Google Doc knowledge base for the voice agent |
-| 7 | `07-hotel-receptionist-agent.json` | Hotel Receptionist Agent | Website Webhook + Chat Trigger | The AI agent for website chat, with memory and all six tools |
+| 7 | `07-hotel-receptionist-agent.json` | Hotel Receptionist Agent | Website Webhook | The AI agent for website chat, with memory and all six tools |
 
 ## Why the tools have two triggers
 

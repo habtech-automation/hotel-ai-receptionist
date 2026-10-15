@@ -1,0 +1,367 @@
+{
+  "name": "Hotel - Create Booking Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"guest_name\": \"Jane Doe\",\n  \"room_type\": \"Deluxe\",\n  \"check_in\": \"2026-10-01\",\n  \"check_out\": \"2026-10-03\"\n}"
+      },
+      "id": "130785ef-0cfb-4756-a9bc-21d3a8a4dcf3",
+      "name": "When Called by Agent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "rooms",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "room_type",
+              "keyValue": "={{ $('Normalize Input').item.json.room_type }}"
+            }
+          ]
+        }
+      },
+      "id": "7cd0c474-f919-443e-94c5-5f217d720105",
+      "name": "Get Rooms",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "bookings",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "status",
+              "keyValue": "confirmed"
+            },
+            {
+              "condition": "eq",
+              "keyName": "room_type",
+              "keyValue": "={{ $('Normalize Input').item.json.room_type }}"
+            }
+          ]
+        }
+      },
+      "id": "78b7c676-fabb-4e17-a2c1-aa4d0591c4c7",
+      "name": "Get Bookings",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        448,
+        96
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('Normalize Input').first().json;\nconst rooms = $('Get Rooms').all().map(item => item.json);\nconst bookings = $('Get Bookings').all().map(item => item.json);\n\nif (rooms.length === 0) {\n  return [{ json: { available: false, reason: 'unknown_room_type', ...trigger } }];\n}\n\nconst room = rooms[0];\nlet overlapping = 0;\nfor (const b of bookings) {\n  const overlaps = !(b.check_out <= trigger.check_in || b.check_in >= trigger.check_out);\n  if (overlaps) overlapping++;\n}\nconst roomsLeft = room.total_rooms - overlapping;\n\nreturn [{\n  json: {\n    available: roomsLeft > 0,\n    rate: room.rate,\n    rooms_left: roomsLeft,\n    guest_name: trigger.guest_name,\n    room_type: trigger.room_type,\n    check_in: trigger.check_in,\n    check_out: trigger.check_out\n  }\n}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "78aff2c6-649c-43f6-9c12-31d6045a6d70",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.available }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "id": "0be4c23e-ce84-4554-808b-c2034d1ea59a"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f2cd47fc-ebc3-4408-b692-3dcfb5b560dc",
+      "name": "Is Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst stamp = now.getTime();\nconst bookingId = 'BK-' + stamp;\nconst confirmationId = 'CONF-' + stamp;\nconst data = $input.first().json;\ndata.booking_id = bookingId;\ndata.confirmation_id = confirmationId;\ndata.status = 'confirmed';\nreturn [{ json: data }];"
+      },
+      "id": "d2b448f2-3ec4-4518-a9f8-a47e1dc228a2",
+      "name": "Generate Booking IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "bookings",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "booking_id",
+              "fieldValue": "={{ $json.booking_id }}"
+            },
+            {
+              "fieldId": "guest_name",
+              "fieldValue": "={{ $json.guest_name }}"
+            },
+            {
+              "fieldId": "room_type",
+              "fieldValue": "={{ $json.room_type }}"
+            },
+            {
+              "fieldId": "check_in",
+              "fieldValue": "={{ $json.check_in }}"
+            },
+            {
+              "fieldId": "check_out",
+              "fieldValue": "={{ $json.check_out }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "confirmation_id",
+              "fieldValue": "={{ $json.confirmation_id }}"
+            }
+          ]
+        }
+      },
+      "id": "15357f01-9108-481c-89e7-584c4b90ca5d",
+      "name": "Insert Booking",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "status",
+              "value": "unavailable",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "message",
+              "value": "={{ \"No \" + $json.room_type + \" rooms available for those dates.\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "07a58774-867e-4570-a2bd-b50bc30e9ab4",
+      "name": "No Availability Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        192
+      ]
+    },
+    {
+      "id": "37868ee9-5021-4649-917c-dd57dc2504e9",
+      "name": "ElevenLabs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        -96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "create-booking",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "94a1a4df-46d9-4ecd-916f-b9795c8c7c9b",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst SHARED_SECRET = 'YOUR_SHARED_SECRET';\n\nlet body;\nif (raw.headers && raw.body !== undefined) {\n  const providedKey = raw.headers['x-api-key'] || raw.headers['X-Api-Key'];\n  if (providedKey !== SHARED_SECRET) {\n    throw new Error('Unauthorized: missing or invalid x-api-key header');\n  }\n  body = raw.body;\n} else {\n  body = raw;\n}\n\nreturn [{\n  json: {\n    guest_name: body.guest_name,\n    room_type: body.room_type,\n    check_in: body.check_in,\n    check_out: body.check_out\n  }\n}];",
+        "mode": "runOnceForAllItems"
+      }
+    }
+  ],
+  "connections": {
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Rooms": {
+      "main": [
+        [
+          {
+            "node": "Get Bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Bookings": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Is Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Available?": {
+      "main": [
+        [
+          {
+            "node": "Generate Booking IDs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Availability Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Booking IDs": {
+      "main": [
+        [
+          {
+            "node": "Insert Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Get Rooms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_HANDLER_WORKFLOW_ID"
+  }
+}

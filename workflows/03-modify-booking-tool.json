@@ -1,0 +1,493 @@
+{
+  "name": "Hotel - Modify Booking Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"booking_id\": \"BK-1234\",\n  \"check_in\": \"2026-10-05\",\n  \"check_out\": \"2026-10-08\"\n}"
+      },
+      "id": "05a60c5d-9d2c-4396-9cf6-c5c5069d839f",
+      "name": "When Called by Agent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "bookings",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "booking_id",
+              "keyValue": "={{ $('Normalize Input').item.json.booking_id }}"
+            }
+          ]
+        }
+      },
+      "id": "12a3273e-ba6e-4371-8f63-313bba472cab",
+      "name": "Get Booking",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        272,
+        224
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('Normalize Input').first().json;\nconst rows = $('Get Booking').all().map(i => i.json);\nif (rows.length === 0) {\n  return [{ json: { found: false, booking_id: trigger.booking_id } }];\n}\nconst booking = rows[0];\nif (booking.status === 'cancelled') {\n  return [{ json: { found: true, cancelled: true, booking_id: trigger.booking_id } }];\n}\nreturn [{\n  json: {\n    found: true,\n    cancelled: false,\n    booking_id: booking.booking_id,\n    room_type: booking.room_type,\n    guest_name: booking.guest_name,\n    confirmation_id: booking.confirmation_id,\n    new_check_in: trigger.check_in,\n    new_check_out: trigger.check_out\n  }\n}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "0274218a-0333-4e29-bdf9-48e8241bef79",
+      "name": "Prepare Modify Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.found }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "id": "2008c1eb-dabf-4f5a-b944-88262bc3f11b"
+            },
+            {
+              "leftValue": "={{ $json.cancelled }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              },
+              "id": "ccaf1248-c11a-41e2-b9ae-891918ae160b"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "61eac963-4631-4f16-822e-27c6dc12c73a",
+      "name": "Booking Found & Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "rooms",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "room_type",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Modify Check').item.json.room_type }}"
+            }
+          ]
+        }
+      },
+      "id": "23b11b19-9c2a-47fd-8f30-da48f12104ee",
+      "name": "Get Room (Modify)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        320
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "bookings",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "confirmed"
+            },
+            {
+              "keyName": "room_type",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Modify Check').item.json.room_type }}"
+            },
+            {
+              "keyName": "booking_id",
+              "condition": "neq",
+              "keyValue": "={{ $('Prepare Modify Check').item.json.booking_id }}"
+            }
+          ]
+        }
+      },
+      "id": "7e953744-b881-4dbb-86ac-6ded5281da61",
+      "name": "Get Other Bookings (Modify)",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        320
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $('Prepare Modify Check').first().json;\nconst rooms = $('Get Room (Modify)').all().map(i => i.json);\nconst others = $('Get Other Bookings (Modify)').all().map(i => i.json);\n\nif (rooms.length === 0) {\n  return [{ json: { available: false, ...prep } }];\n}\nconst room = rooms[0];\nlet overlapping = 0;\nfor (const b of others) {\n  const overlaps = !(b.check_out <= prep.new_check_in || b.check_in >= prep.new_check_out);\n  if (overlaps) overlapping++;\n}\nconst roomsLeft = room.total_rooms - overlapping;\n\nreturn [{\n  json: {\n    available: roomsLeft > 0,\n    booking_id: prep.booking_id,\n    guest_name: prep.guest_name,\n    room_type: prep.room_type,\n    confirmation_id: prep.confirmation_id,\n    new_check_in: prep.new_check_in,\n    new_check_out: prep.new_check_out\n  }\n}];"
+      },
+      "id": "f8e441e9-44b6-448d-91a7-efbe220ebb70",
+      "name": "Compute New Availability",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.available }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0f4e0003-6a6b-4a65-80ae-c6663f330798",
+      "name": "New Dates Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1504,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "bookings",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "booking_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.booking_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "check_in",
+              "fieldValue": "={{ $json.new_check_in }}"
+            },
+            {
+              "fieldId": "check_out",
+              "fieldValue": "={{ $json.new_check_out }}"
+            }
+          ]
+        }
+      },
+      "id": "31c314d0-d5e2-402c-8c65-dae96c4ef1c3",
+      "name": "Update Booking Dates",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1728,
+        96
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "status",
+              "value": "unavailable",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "message",
+              "value": "={{ \"No \" + $json.room_type + \" rooms available for the new dates. Booking unchanged.\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8cfddb34-df55-437b-9d89-07e4c20e9bfc",
+      "name": "New Dates Unavailable",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1728,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "message",
+              "value": "={{ $json.found ? \"This booking is already cancelled and cannot be modified.\" : \"No booking found with that booking_id.\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "925bf891-466b-45a2-a804-9c233083ed89",
+      "name": "Booking Not Found or Cancelled",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        0
+      ]
+    },
+    {
+      "id": "038c18f4-440f-422e-abc1-ea83a0945dd2",
+      "name": "ElevenLabs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "modify-booking",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "90ad104e-3525-4861-ac2c-1631120c279b",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        96
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst SHARED_SECRET = 'YOUR_SHARED_SECRET';\n\nlet body;\nif (raw.headers && raw.body !== undefined) {\n  const providedKey = raw.headers['x-api-key'] || raw.headers['X-Api-Key'];\n  if (providedKey !== SHARED_SECRET) {\n    throw new Error('Unauthorized: missing or invalid x-api-key header');\n  }\n  body = raw.body;\n} else {\n  body = raw;\n}\n\nreturn [{\n  json: {\n    booking_id: body.booking_id,\n    check_in: body.check_in,\n    check_out: body.check_out\n  }\n}];",
+        "mode": "runOnceForAllItems"
+      }
+    }
+  ],
+  "connections": {
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Booking": {
+      "main": [
+        [
+          {
+            "node": "Prepare Modify Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Modify Check": {
+      "main": [
+        [
+          {
+            "node": "Booking Found & Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Found & Active?": {
+      "main": [
+        [
+          {
+            "node": "Get Room (Modify)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Booking Not Found or Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Room (Modify)": {
+      "main": [
+        [
+          {
+            "node": "Get Other Bookings (Modify)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Other Bookings (Modify)": {
+      "main": [
+        [
+          {
+            "node": "Compute New Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute New Availability": {
+      "main": [
+        [
+          {
+            "node": "New Dates Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Dates Available?": {
+      "main": [
+        [
+          {
+            "node": "Update Booking Dates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "New Dates Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Get Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_HANDLER_WORKFLOW_ID"
+  }
+}

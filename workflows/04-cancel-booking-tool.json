@@ -1,0 +1,337 @@
+{
+  "name": "Hotel - Cancel Booking Tool",
+  "nodes": [
+    {
+      "id": "b0d6ea63-0941-420b-a28a-0f8d6017cb4a",
+      "name": "When Called by Agent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        192
+      ],
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"booking_id\": \"BK-1234\"\n}"
+      }
+    },
+    {
+      "id": "2491604f-1ac4-45eb-9f6d-42b01c68afcd",
+      "name": "Get Booking",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        272,
+        224
+      ],
+      "parameters": {
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "booking_id",
+              "keyValue": "={{ $('Normalize Input').item.json.booking_id }}"
+            }
+          ]
+        },
+        "matchType": "allFilters",
+        "operation": "getAll",
+        "resource": "row",
+        "returnAll": true,
+        "tableId": "bookings"
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "id": "b162c4fe-526b-4161-8436-72a0316549d7",
+      "name": "Prepare Cancellation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        224
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const trigger = $('Normalize Input').first().json;\nconst rows = $('Get Booking').all().map(i => i.json);\nif (rows.length === 0) {\n  return [{ json: { found: false, booking_id: trigger.booking_id } }];\n}\nconst booking = rows[0];\nif (booking.status === 'cancelled') {\n  return [{ json: { found: true, already_cancelled: true, booking_id: booking.booking_id } }];\n}\nconst now = new Date();\nconst checkIn = new Date(booking.check_in);\nconst hoursUntilCheckIn = (checkIn.getTime() - now.getTime()) / (1000 * 60 * 60);\nconst feeCharged = hoursUntilCheckIn < 48;\nreturn [{\n  json: {\n    found: true,\n    already_cancelled: false,\n    booking_id: booking.booking_id,\n    guest_name: booking.guest_name,\n    room_type: booking.room_type,\n    check_in: booking.check_in,\n    fee_charged: feeCharged\n  }\n}];"
+      }
+    },
+    {
+      "id": "61ef10d0-89f6-4bda-b43f-4ce43d01edff",
+      "name": "Booking Found & Not Cancelled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.found }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "leftValue": "={{ $json.already_cancelled }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "919f5cfa-be65-445f-96f0-db1048881218",
+      "name": "Update Booking Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        320
+      ],
+      "parameters": {
+        "operation": "update",
+        "resource": "row",
+        "tableId": "bookings",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "booking_id",
+              "keyValue": "={{ $json.booking_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "=cancelled"
+            }
+          ]
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASEAPI_ID",
+          "name": "Your supabaseApi"
+        }
+      }
+    },
+    {
+      "id": "0952b827-5442-4582-b03e-2d26f3b7c59c",
+      "name": "Cancellation Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1248,
+        320
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "status",
+              "value": "cancelled",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "booking_id",
+              "value": "={{ $('Prepare Cancellation').item.json.booking_id }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "fee_charged",
+              "value": "={{ $('Prepare Cancellation').item.json.fee_charged }}",
+              "type": "boolean"
+            },
+            {
+              "id": "a4",
+              "name": "message",
+              "value": "={{ $('Prepare Cancellation').item.json.fee_charged ? 'Booking cancelled. This was within 48 hours of check-in, so a cancellation fee applies.' : 'Booking cancelled free of charge.' }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f8a97efe-ac9b-4436-8528-912c88caf26a",
+      "name": "Not Found or Already Cancelled",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "message",
+              "value": "={{ $json.found ? \"This booking is already cancelled.\" : \"No booking found with that booking_id.\" }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "34b52332-1ac7-4c36-9644-11db40aaf7c1",
+      "name": "ElevenLabs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "cancel-booking",
+        "responseMode": "lastNode"
+      }
+    },
+    {
+      "id": "396c6f26-d4bd-4daa-b3c6-2b5662d7201c",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        96
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nconst SHARED_SECRET = 'YOUR_SHARED_SECRET';\n\nlet body;\nif (raw.headers && raw.body !== undefined) {\n  const providedKey = raw.headers['x-api-key'] || raw.headers['X-Api-Key'];\n  if (providedKey !== SHARED_SECRET) {\n    throw new Error('Unauthorized: missing or invalid x-api-key header');\n  }\n  body = raw.body;\n} else {\n  body = raw;\n}\n\nreturn [{\n  json: {\n    booking_id: body.booking_id\n  }\n}];",
+        "mode": "runOnceForAllItems"
+      }
+    }
+  ],
+  "connections": {
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Booking": {
+      "main": [
+        [
+          {
+            "node": "Prepare Cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Cancellation": {
+      "main": [
+        [
+          {
+            "node": "Booking Found & Not Cancelled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Found & Not Cancelled?": {
+      "main": [
+        [
+          {
+            "node": "Update Booking Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Found or Already Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Booking Status": {
+      "main": [
+        [
+          {
+            "node": "Cancellation Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Get Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "YOUR_ERROR_HANDLER_WORKFLOW_ID"
+  }
+}
